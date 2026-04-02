@@ -1,12 +1,10 @@
-# Produktions-Deployment mit Traefik als Reverse Proxy + automatischem HTTPS
+# Produktions-Deployment mit externem Traefik als Reverse Proxy
 #
-# Vorbereitungen auf dem Server:
-#   mkdir -p letsencrypt
-#   touch letsencrypt/acme.json && chmod 600 letsencrypt/acme.json
+# Voraussetzungen:
+#   - Traefik läuft extern im Docker-Netzwerk "proxy"
 #
 # Benötigte Umgebungsvariablen (in .env):
 #   DOMAIN=foerderverein.example.de
-#   ACME_EMAIL=admin@example.de
 #   POSTGRES_PASSWORD=sicheres_passwort
 #   JWT_SECRET=sicherer_zufallsstring
 #
@@ -15,29 +13,6 @@
 version: "3.9"
 
 services:
-
-  traefik:
-    image: traefik:v3.1
-    container_name: foerderverein-traefik
-    restart: unless-stopped
-    command:
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./letsencrypt:/letsencrypt"
-    networks:
-      - proxy
 
   db:
     image: postgres:16-alpine
@@ -100,14 +75,21 @@ services:
       - internal
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.foerderverein.entrypoints=http"
+      - "traefik.http.routers.foerderverein.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.middlewares.foerderverein-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.foerderverein.middlewares=foerderverein-https-redirect"
+      - "traefik.http.routers.foerderverein-secure.entrypoints=https"
+      - "traefik.http.routers.foerderverein-secure.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.foerderverein-secure.tls=true"
+      - "traefik.http.routers.foerderverein-secure.tls.certresolver=http"
+      - "traefik.http.routers.foerderverein-secure.service=foerderverein"
+      - "traefik.http.services.foerderverein.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
 
 networks:
   proxy:
-    name: foerderverein-proxy
+    external: true
   internal:
     name: foerderverein-internal
     internal: true   # kein Internetzugang für DB und Backend

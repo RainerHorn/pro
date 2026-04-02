@@ -1,0 +1,37 @@
+#version: '3.1'
+
+services:
+  kegelverwaltung:
+
+    image: kegeltabelle-kegeltabelle:latest 
+    container_name: Kegelverwaltung
+    ports:
+      - "9090:8080"
+    environment:
+      - DB_PATH=/opt/containers/kegeltabelle/database
+      - ADMIN_PASSWORD=adminkegel1956
+      - USER_PASSWORD=kegel1956
+    volumes:
+      - type: bind
+        source: ./database/kegeltabelle.db
+        target: /app/db/kegeltabelle.db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kegelverwaltung.entrypoints=http"
+      - "traefik.http.routers.kegelverwaltung.rule=Host(`tabelle.hornwienashorn.de`)"
+      - "traefik.http.middlewares.kegelverwaltung-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.kegelverwaltung.middlewares=kegelverwaltung-https-redirect"
+      - "traefik.http.routers.kegelverwaltung-secure.entrypoints=https"
+      - "traefik.http.routers.kegelverwaltung-secure.rule=Host(`tabelle.hornwienashorn.de`)"
+      - "traefik.http.routers.kegelverwaltung-secure.tls=true"
+      - "traefik.http.routers.kegelverwaltung-secure.tls.certresolver=http"
+      - "traefik.http.routers.kegelverwaltung-secure.service=kegelverwaltung"
+      - "traefik.http.services.kegelverwaltung.loadbalancer.server.port=9090"
+      - "traefik.docker.network=proxy"
+
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
