@@ -1,0 +1,113 @@
+# Produktions-Deployment mit Traefik als Reverse Proxy + automatischem HTTPS
+#
+# Vorbereitungen auf dem Server:
+#   mkdir -p letsencrypt
+#   touch letsencrypt/acme.json && chmod 600 letsencrypt/acme.json
+#
+# Benötigte Umgebungsvariablen (in .env):
+#   DOMAIN=foerderverein.example.de
+#   ACME_EMAIL=admin@example.de
+#   POSTGRES_PASSWORD=sicheres_passwort
+#   JWT_SECRET=sicherer_zufallsstring
+#
+# Starten: docker compose -f docker-compose.prod.yml up -d
+
+version: "3.9"
+
+services:
+
+  traefik:
+    image: traefik:v3.1
+    container_name: foerderverein-traefik
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+    networks:
+      - proxy
+
+  db:
+    image: postgres:16-alpine
+    container_name: foerderverein-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-foerderverein}
+      POSTGRES_USER: ${POSTGRES_USER:-fvuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./db/data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    # Kein Port-Mapping – DB nur intern erreichbar
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fvuser} -d ${POSTGRES_DB:-foerderverein}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: foerderverein-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fvuser}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-foerderverein}
+      JWT_SECRET: ${JWT_SECRET}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM:-noreply@foerderverein.de}
+      CORS_ORIGIN: https://${DOMAIN}
+      UPLOAD_DIR: /app/uploads
+      PORT: 4000
+    volumes:
+      - ./uploads:/app/uploads
+    # Kein Port-Mapping – Backend nur intern erreichbar
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: foerderverein-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - proxy
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+
+networks:
+  proxy:
+    name: foerderverein-proxy
+  internal:
+    name: foerderverein-internal
+    internal: true   # kein Internetzugang für DB und Backend

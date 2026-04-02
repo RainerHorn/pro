@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: foerderverein-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-foerderverein}
+      POSTGRES_USER: ${POSTGRES_USER:-fvuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fvpassword}
+    volumes:
+      - ./db/data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fvuser} -d ${POSTGRES_DB:-foerderverein}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: foerderverein-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fvuser}:${POSTGRES_PASSWORD:-fvpassword}@db:5432/${POSTGRES_DB:-foerderverein}
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM:-noreply@foerderverein.de}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      UPLOAD_DIR: /app/uploads
+      PORT: 4000
+    volumes:
+      - ./uploads:/app/uploads
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: foerderverein-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+
+
+# ──────────────────────────────────────────────────────────
+# OPTIONALER SERVICE: Mailhog (lokaler SMTP für E-Mail-Tests)
+# Aktivieren: Kommentarzeichen (#) entfernen
+# Web-UI: http://localhost:8025
+# In .env setzen: SMTP_HOST=mailhog  SMTP_PORT=1025
+# ──────────────────────────────────────────────────────────
+#  mailhog:
+#    image: mailhog/mailhog:latest
+#    container_name: foerderverein-mailhog
+#    ports:
+#      - "1025:1025"
+#      - "8025:8025"
