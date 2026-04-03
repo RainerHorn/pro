@@ -25,9 +25,8 @@ services:
     volumes:
       - ./db/data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
-    # Kein Port-Mapping – DB nur intern erreichbar
     networks:
-      - internal
+      - proxy
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fvuser} -d ${POSTGRES_DB:-foerderverein}"]
       interval: 10s
@@ -58,9 +57,8 @@ services:
       PORT: 4000
     volumes:
       - ./uploads:/app/uploads
-    # Kein Port-Mapping – Backend nur intern erreichbar
     networks:
-      - internal
+      - proxy
 
   frontend:
     build:
@@ -72,7 +70,6 @@ services:
       - backend
     networks:
       - proxy
-      - internal
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.foerderverein.entrypoints=http"
@@ -90,6 +87,4 @@ services:
 networks:
   proxy:
     external: true
-  internal:
-    name: foerderverein-internal
-    internal: true   # kein Internetzugang für DB und Backend
+  

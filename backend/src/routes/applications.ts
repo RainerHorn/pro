@@ -42,11 +42,9 @@ applicationsRouter.post(
 
       const application = result.rows[0];
 
-      // Vorstandsmitglieder benachrichtigen
+      // Vorstand benachrichtigen
       try {
-        const boardResult = await db.query('SELECT email FROM board_members');
         await sendNewApplicationNotification(
-          boardResult.rows.map((r: { email: string }) => r.email),
           { id: application.id, name, type, scope, budget, dateRange, classGroup }
         );
       } catch (emailErr) {

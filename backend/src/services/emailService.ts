@@ -11,7 +11,6 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function sendNewApplicationNotification(
-  boardEmails: string[],
   application: {
     id: string; name: string; type: string; scope: string;
     budget?: number; dateRange?: string; classGroup?: string;
@@ -21,7 +20,7 @@ export async function sendNewApplicationNotification(
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM,
-    to: boardEmails.join(', '),
+    to: 'pro@mmbbs.de',
     subject: `Neuer Förderantrag: ${application.type}`,
     html: `
       <h2>Neuer Förderantrag eingegangen</h2>
