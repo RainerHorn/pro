@@ -37,6 +37,38 @@ export async function sendNewApplicationNotification(
   });
 }
 
+export async function sendApplicationConfirmation(
+  applicantEmail: string,
+  application: {
+    id: string; name: string; type: string; scope: string;
+    budget?: number; dateRange?: string; classGroup?: string;
+  }
+): Promise<void> {
+  const statusUrl = `${process.env.APP_URL || 'http://localhost:3000'}/antrag-status/${application.id}`;
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM,
+    to: applicantEmail,
+    subject: `Ihr Förderantrag wurde eingereicht`,
+    html: `
+      <h2>Vielen Dank, ${application.name}!</h2>
+      <p>Ihr Förderantrag ist bei uns eingegangen und wird vom Vorstand geprüft.</p>
+      <h3>Ihre Antragsdetails</h3>
+      <table style="border-collapse:collapse">
+        <tr><td><strong>Antrags-ID:</strong></td><td><code>${application.id}</code></td></tr>
+        <tr><td><strong>Art der Unterstützung:</strong></td><td>${application.type}</td></tr>
+        <tr><td><strong>Umfang:</strong></td><td>${application.scope}</td></tr>
+        ${application.budget != null ? `<tr><td><strong>Budget:</strong></td><td>${application.budget} €</td></tr>` : ''}
+        ${application.dateRange ? `<tr><td><strong>Zeitraum:</strong></td><td>${application.dateRange}</td></tr>` : ''}
+        ${application.classGroup ? `<tr><td><strong>Klasse/Gruppe:</strong></td><td>${application.classGroup}</td></tr>` : ''}
+      </table>
+      <p>Den aktuellen Status Ihres Antrags können Sie jederzeit hier einsehen:<br>
+      <a href="${statusUrl}">${statusUrl}</a></p>
+      <p>Mit freundlichen Grüßen<br>Der Vorstand des Pro MMBbS Fördervereins e.V.</p>
+    `,
+  });
+}
+
 export async function sendDecisionNotification(
   applicantEmail: string,
   applicantName: string,

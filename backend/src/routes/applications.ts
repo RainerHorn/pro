@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../models/db';
 import { upload } from '../middleware/upload';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { sendNewApplicationNotification } from '../services/emailService';
+import { sendNewApplicationNotification, sendApplicationConfirmation } from '../services/emailService';
 import { processVoteResult } from '../services/voteService';
 
 export const applicationsRouter = Router();
@@ -49,6 +49,16 @@ applicationsRouter.post(
         );
       } catch (emailErr) {
         console.error('E-Mail-Fehler (nicht kritisch):', emailErr);
+      }
+
+      // Antragsteller bestätigen
+      try {
+        await sendApplicationConfirmation(
+          email,
+          { id: application.id, name, type, scope, budget: budgetNum ?? undefined, dateRange, classGroup }
+        );
+      } catch (emailErr) {
+        console.error('Bestätigungs-E-Mail-Fehler (nicht kritisch):', emailErr);
       }
 
       res.status(201).json({
