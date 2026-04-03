@@ -53,6 +53,7 @@ services:
       SMTP_PASS: ${SMTP_PASS}
       SMTP_FROM: ${SMTP_FROM:-noreply@foerderverein.de}
       CORS_ORIGIN: https://${DOMAIN}
+      APP_URL: https://${DOMAIN}
       UPLOAD_DIR: /app/uploads
       PORT: 4000
     volumes:
