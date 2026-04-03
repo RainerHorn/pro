@@ -2,7 +2,7 @@
 
 Web-App für den Förderverein Pro MMBbS e.V.: Öffentliche Antragstellung, Vorstandsabstimmung mit Stichentscheid-Regel und automatische E-Mail-Benachrichtigungen – vollständig in Docker.
 
-## Schnellstart
+## Schnellstart (lokal)
 
 ### 1. Konfiguration
 ```powershell
@@ -28,6 +28,46 @@ docker compose up --build
 | http://localhost:3000 | Antragsportal (öffentlich) |
 | http://localhost:3000/vorstand/login | Vorstand-Login |
 | http://localhost:4000/api/health | API-Statuscheck |
+
+---
+
+## Produktions-Deployment (Traefik)
+
+Für den Serverbetrieb wird `docker-compose.prod.yml` verwendet. Voraussetzung ist ein laufender [Traefik](https://traefik.io/)-Reverse-Proxy im externen Docker-Netzwerk `proxy`, der TLS-Terminierung übernimmt.
+
+### 1. Pflicht-Variablen in `.env` setzen
+
+```env
+DOMAIN=foerderverein.example.de
+APP_URL=https://foerderverein.example.de
+POSTGRES_PASSWORD=sicheres_passwort
+JWT_SECRET=langer_zufaelliger_string
+SMTP_HOST=smtp.IHR_PROVIDER.de
+SMTP_PORT=587
+SMTP_USER=foerderverein@mmbbs.de
+SMTP_PASS=IHR_SMTP_PASSWORT
+SMTP_FROM=foerderverein@mmbbs.de
+```
+
+### 2. App starten
+
+```powershell
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Traefik leitet automatisch HTTP → HTTPS um und stellt das Zertifikat bereit.
+Die App ist danach unter `https://$DOMAIN` erreichbar.
+
+### 3. Passwörter setzen (Ersteinrichtung)
+
+```powershell
+cd db; node generate-passwords.js
+docker exec -it foerderverein-db psql -U fvuser -d foerderverein
+```
+```sql
+UPDATE board_members SET password_hash='$2b$10$...' WHERE username='rhorn';
+-- (für alle vier Vorstandsmitglieder wiederholen)
+```
 
 ---
 
